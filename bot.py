@@ -103,6 +103,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دستور /help"""
+    help_text = """
+🤖 دستورات ربات:
+
+/start - شروع ربات
+/help - راهنما
+"""
+    await update.message.reply_text(help_text)
+
+
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -177,6 +188,7 @@ def main():
     application = Application.builder().token(BOT_TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CallbackQueryHandler(button_callback))
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)
