@@ -6,8 +6,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
-    print("❌ BOT_TOKEN not found!")
-    exit(1)
+    BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
 
 USERS_FILE = "users_data.json"
 
@@ -65,9 +64,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data == "option_1":
-        await query.edit_message_text("✨ گزینه 1\n\nمحتوای خاص")
+        await query.edit_message_text("✨ گزینه 1 انتخاب شد!")
     elif query.data == "option_2":
-        await query.edit_message_text("⚡ گزینه 2\n\nمحتوای خاص")
+        await query.edit_message_text("⚡ گزینه 2 انتخاب شد!")
     elif query.data == "option_3":
         keyboard = InlineKeyboardMarkup([
             [
@@ -86,9 +85,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("📚 گزینه 3", reply_markup=keyboard)
     elif query.data.startswith("sub_"):
         sub_num = query.data.split("_")[1]
-        await query.edit_message_text(f"🔹 زیرشاخه {sub_num}\n\nمحتوای خاص")
+        await query.edit_message_text(f"🔹 زیرشاخه {sub_num}")
 
 def main():
     print("🚀 ربات شروع شد...")
-    application = Application
-
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button_callback))
+    
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+if __name__ == "__main__":
+    main()
