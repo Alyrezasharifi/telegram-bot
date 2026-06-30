@@ -8,6 +8,9 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
 
+# ⭐ ADMIN ID تو را اینجا بگذار
+ADMIN_ID = int(os.getenv("ADMIN_ID"))  # ← خود Admin ID تو را بگذار!
+
 USERS_FILE = "users_data.json"
 FILES_FOLDER = "uploaded_files"
 
@@ -15,6 +18,10 @@ if not os.path.exists(FILES_FOLDER):
     os.makedirs(FILES_FOLDER)
 
 FILES_DB = "files_db.json"
+
+def is_admin(user_id):
+    """بررسی اینکه آیا کاربر Admin است"""
+    return user_id == ADMIN_ID
 
 def load_files_db():
     if os.path.exists(FILES_DB):
@@ -52,6 +59,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = user.username or "ندارد"
     first_name = user.first_name or "نام"
     
+    # Admin ID را چاپ کن (برای یافتن ID)
+    print(f"👤 User ID: {user_id} | نام: {first_name}")
+    
     if not user_exists(user_id):
         users = load_users_data()
         users.append({
@@ -63,64 +73,116 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_users_data(users)
         print(f"✅ کاربر جدید: {first_name}")
     
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("𓇳𓄂", callback_data="option_1"),
-            InlineKeyboardButton("𓅊𓂍", callback_data="option_2")
-        ],
-        [
-            InlineKeyboardButton("°8", callback_data="option_3")
-        ]
-    ])
-    
-    await update.message.reply_text(
-        f" {first_name}!\n\nu R in! 🤖",
-        reply_markup=keyboard
-    )
+    # اگر Admin باشد
+    if is_admin(user_id):
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("🎁 گزینه 1", callback_data="option_1"),
+                InlineKeyboardButton("⚙️ گزینه 2", callback_data="option_2")
+            ],
+            [
+                InlineKeyboardButton("📚 گزینه 3", callback_data="option_3")
+            ],
+            [
+                InlineKeyboardButton("👥 مدیریت کاربران", callback_data="admin_users"),
+                InlineKeyboardButton("📤 آپلود فایل", callback_data="admin_upload")
+            ]
+        ])
+        
+        await update.message.reply_text(
+            f"👋 سلام Admin {first_name}!\n\n"
+            f"🔐 شما Admin هستید!\n"
+            f"🆔 ID شما: {user_id}\n\n"
+            f"خوش‌آمدید! 🤖",
+            reply_markup=keyboard
+        )
+    else:
+        # کاربر عادی
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("🎁 گزینه 1", callback_data="option_1"),
+                InlineKeyboardButton("⚙️ گزینه 2", callback_data="option_2")
+            ],
+            [
+                InlineKeyboardButton("📚 گزینه 3", callback_data="option_3")
+            ]
+        ])
+        
+        await update.message.reply_text(
+            f"👋 سلام {first_name}!\n\nخوش‌آمدید! 🤖",
+            reply_markup=keyboard
+        )
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    user_id = query.from_user.id
+    
+    # فقط Admin می‌تواند فایل آپلود کند
+    if query.data == "admin_upload" and not is_admin(user_id):
+        await query.answer("❌ شما Admin نیستید!")
+        return
+    
+    if query.data == "admin_users" and not is_admin(user_id):
+        await query.answer("❌ شما Admin نیستید!")
+        return
+    
     await query.answer()
     
     if query.data == "option_1":
-        await query.edit_message_text("nope!")
+        await query.edit_message_text("✨ گزینه 1 انتخاب شد!")
     
     elif query.data == "option_2":
-        await query.edit_message_text("R u serious?!")
+        await query.edit_message_text("⚡ گزینه 2 انتخاب شد!")
     
     elif query.data == "option_3":
-        text = "click on 4"
+        text = "📚 گزینه 3 - 6 دسته اصلی"
         keyboard = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("🔸 زیر 1", callback_data="sub_1"),
-                InlineKeyboardButton("🔹 زیر 2", callback_data="sub_2")
+                InlineKeyboardButton("🔸 دسته 1", callback_data="sub_1"),
+                InlineKeyboardButton("🔹 دسته 2", callback_data="sub_2")
             ],
             [
-                InlineKeyboardButton("🔶 زیر 3", callback_data="sub_3"),
-                InlineKeyboardButton("Do u trust me?💀", callback_data="sub_4")
+                InlineKeyboardButton("🔶 دسته 3", callback_data="sub_3"),
+                InlineKeyboardButton("🟠 دسته 4", callback_data="sub_4")
             ],
             [
-                InlineKeyboardButton("🟡 زیر 5", callback_data="sub_5"),
-                InlineKeyboardButton("🟢 زیر 6", callback_data="sub_6")
+                InlineKeyboardButton("🟡 دسته 5", callback_data="sub_5"),
+                InlineKeyboardButton("🟢 دسته 6", callback_data="sub_6")
             ]
         ])
         await query.edit_message_text(text=text, reply_markup=keyboard)
     
-    # 6 زیرشاخه اصلی
+    elif query.data == "admin_users":
+        users = load_users_data()
+        text = f"📊 کل کاربران: {len(users)}\n\n"
+        
+        for idx, user in enumerate(users[:20], 1):  # حداکثر 20 نفر
+            text += f"{idx}. {user['first_name']}\n"
+            text += f"   🆔 ID: {user['user_id']}\n"
+            text += f"   📅 {user['registration_date']}\n\n"
+        
+        if len(users) > 20:
+            text += f"\n... و {len(users)-20} کاربر دیگر"
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("⬅️ بازگشت", callback_data="back_admin")]
+        ])
+        await query.edit_message_text(text=text, reply_markup=keyboard)
+    
+    elif query.data == "back_admin":
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("👥 مدیریت کاربران", callback_data="admin_users"),
+                InlineKeyboardButton("📤 آپلود فایل", callback_data="admin_upload")
+            ]
+        ])
+        await query.edit_message_text("📋 منوی Admin:", reply_markup=keyboard)
+    
     elif query.data.startswith("sub_") and len(query.data) == 5:
         sub_num = query.data.split("_")[1]
         
-        text = f"🔹 زیرشاخه {sub_num}\n\n13 زیر‌زیرشاخه را انتخاب کنید:"
+        text = f"📌 دسته {sub_num}\n\n13 زیردسته را انتخاب کنید:"
         
-        # 13 زیر‌زیرشاخه برای هر زیرشاخه
-        buttons = []
-        for i in range(1, 14):
-            buttons.append(InlineKeyboardButton(f"📌 {i}", callback_data=f"subsub_{sub_num}_{i}"))
-            if i % 2 == 0:
-                buttons_row = buttons[i-2:i]
-                keyboard_buttons = [buttons_row]
-        
-        # اضافه کردن دکمه‌های دو تایی
         keyboard_buttons = []
         for i in range(1, 14, 2):
             if i + 1 <= 13:
@@ -138,7 +200,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await query.edit_message_text(text=text, reply_markup=keyboard)
     
-    # 13 زیر‌زیرشاخه
     elif query.data.startswith("subsub_"):
         parts = query.data.split("_")
         sub_num = parts[1]
@@ -147,9 +208,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         files_db = load_files_db()
         file_key = f"sub_{sub_num}_subsub_{subsub_num}"
         
-        text = f"📌 زیر‌زیرشاخه {subsub_num} از زیرشاخه {sub_num}\n\n"
+        text = f"📌 زیردسته {subsub_num} از دسته {sub_num}\n\n"
         
-        # نمایش فایل‌های موجود
         if file_key in files_db and files_db[file_key]:
             text += "📂 فایل‌های موجود:\n"
             for i, file_info in enumerate(files_db[file_key], 1):
@@ -175,7 +235,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("❌ هیچ فایلی برای دانلود وجود ندارد!")
             return
         
-        # نمایش دکمه‌های دانلود برای هر فایل
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"📄 {file_info['name']}", callback_data=f"get_file_{sub_num}_{subsub_num}_{i}")]
             for i, file_info in enumerate(files_db[file_key])
@@ -214,36 +273,38 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.message.reply_text("❌ فایل حذف شده است!")
 
 async def handle_file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دریافت فایل آپلود شده"""
+    """دریافت فایل آپلود شده - فقط Admin"""
+    user_id = update.effective_user.id
     message = update.message
+    
+    # فقط Admin می‌تواند فایل آپلود کند
+    if not is_admin(user_id):
+        await message.reply_text("❌ شما Admin نیستید!\n\nفقط Admin می‌تواند فایل آپلود کند.")
+        return
     
     if message.document:
         file = message.document
         file_name = file.file_name
         
-        # دریافت فایل
         new_file = await context.bot.get_file(file.file_id)
         
-        # ذخیره فایل
         file_path = os.path.join(FILES_FOLDER, file_name)
         await new_file.download_to_drive(file_path)
         
-        # نمایش منوی انتخاب زیرشاخه
         keyboard_buttons = []
         for i in range(1, 7, 2):
             if i + 1 <= 6:
                 keyboard_buttons.append([
-                    InlineKeyboardButton(f"🔹 زیر {i}", callback_data=f"upload_select_sub_{i}"),
-                    InlineKeyboardButton(f"🔹 زیر {i+1}", callback_data=f"upload_select_sub_{i+1}")
+                    InlineKeyboardButton(f"🔹 دسته {i}", callback_data=f"upload_select_sub_{i}"),
+                    InlineKeyboardButton(f"🔹 دسته {i+1}", callback_data=f"upload_select_sub_{i+1}")
                 ])
             else:
                 keyboard_buttons.append([
-                    InlineKeyboardButton(f"🔹 زیر {i}", callback_data=f"upload_select_sub_{i}")
+                    InlineKeyboardButton(f"🔹 دسته {i}", callback_data=f"upload_select_sub_{i}")
                 ])
         
         keyboard = InlineKeyboardMarkup(keyboard_buttons)
         
-        # ذخیره مسیر فایل در context
         context.user_data['uploaded_file'] = {
             'name': file_name,
             'path': file_path
@@ -251,15 +312,19 @@ async def handle_file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         await message.reply_text(
             f"📄 فایل '{file_name}' دریافت شد!\n\n"
-            "این فایل را برای کدام زیرشاخه اصلی ذخیره کنم؟",
+            "این فایل را برای کدام دسته ذخیره کنم؟",
             reply_markup=keyboard
         )
-    else:
-        await message.reply_text("❌ لطفاً فایل را آپلود کنید!")
 
 async def handle_upload_select_sub(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """انتخاب زیرشاخه برای آپلود"""
+    """انتخاب دسته برای آپلود"""
     query = update.callback_query
+    user_id = query.from_user.id
+    
+    if not is_admin(user_id):
+        await query.answer("❌ شما Admin نیستید!")
+        return
+    
     await query.answer()
     
     if query.data.startswith("upload_select_sub_"):
@@ -267,7 +332,6 @@ async def handle_upload_select_sub(update: Update, context: ContextTypes.DEFAULT
         
         context.user_data['upload_sub'] = sub_num
         
-        # نمایش منوی انتخاب زیر‌زیرشاخه
         keyboard_buttons = []
         for i in range(1, 14, 2):
             if i + 1 <= 13:
@@ -283,13 +347,19 @@ async def handle_upload_select_sub(update: Update, context: ContextTypes.DEFAULT
         keyboard = InlineKeyboardMarkup(keyboard_buttons)
         
         await query.edit_message_text(
-            f"اکنون زیر‌زیرشاخه را برای زیرشاخه {sub_num} انتخاب کنید:",
+            f"اکنون زیردسته را برای دسته {sub_num} انتخاب کنید:",
             reply_markup=keyboard
         )
 
 async def handle_upload_select_subsub(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """انتخاب زیر‌زیرشاخه و ذخیره فایل"""
+    """انتخاب زیردسته و ذخیره فایل"""
     query = update.callback_query
+    user_id = query.from_user.id
+    
+    if not is_admin(user_id):
+        await query.answer("❌ شما Admin نیستید!")
+        return
+    
     await query.answer()
     
     if query.data.startswith("upload_select_subsub_"):
@@ -302,7 +372,6 @@ async def handle_upload_select_subsub(update: Update, context: ContextTypes.DEFA
         file_info = context.user_data['uploaded_file']
         sub_num = context.user_data['upload_sub']
         
-        # ذخیره در پایگاه داده
         files_db = load_files_db()
         file_key = f"sub_{sub_num}_subsub_{subsub_num}"
         
@@ -318,11 +387,10 @@ async def handle_upload_select_subsub(update: Update, context: ContextTypes.DEFA
         save_files_db(files_db)
         
         await query.edit_message_text(
-            f"✅ فایل '{file_info['name']}' برای زیرشاخه {sub_num} → زیر‌زیرشاخه {subsub_num} ذخیره شد!\n\n"
+            f"✅ فایل '{file_info['name']}' برای دسته {sub_num} → زیردسته {subsub_num} ذخیره شد!\n\n"
             f"کاربران می‌توانند این فایل را دانلود کنند."
         )
         
-        # پاک کردن فایل موقت از context
         del context.user_data['uploaded_file']
         del context.user_data['upload_sub']
 
