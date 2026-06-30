@@ -1,0 +1,6 @@
+*.pyc
+__pycache__/
+.env
+*.json
+user_images/
+files/
