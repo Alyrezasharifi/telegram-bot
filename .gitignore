@@ -1,6 +1,6 @@
 *.pyc
 __pycache__/
 .env
-*.json
+users_data.json
 user_images/
 files/
