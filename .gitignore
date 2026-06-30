@@ -1,4 +1,33 @@
+# Python
 *.pyc
+__pycache__/
+*.egg-info/
+
+# Environment
+.env
+.env.local
+
+# Sensitive Data
+bot.py
+config.py
+secrets.json
+
+# Database
+users_data.json
+files_db.json
+
+# Uploads
+uploaded_files/
+user_images/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db*.pyc
 __pycache__/
 .env
 # users_data.json  ← این خط را کامنت کن
