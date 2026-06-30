@@ -448,11 +448,17 @@ def main():
     application.add_handler(CommandHandler("users", users_command))
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("export", export_command))
+    application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CallbackQueryHandler(button_callback))
     
-    print("\n🚀 ربات شروع شد...\n")
-    print("📁 پوشه فایل‌ها: files/")
-    print("   فایل‌های خود را در اینجا قرار دهید\n")
+    print("\n" + "="*60)
+    print("🚀 bot started...")
+    print("="*60)
+    print(f"📁 data file: {USERS_FILE}")
+    print(f"📸 image folder: {IMAGES_FOLDER}")
+    print("="*60 + "\n")
+    
+    # استفاده از polling (نه webhook)
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
