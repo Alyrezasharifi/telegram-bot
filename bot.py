@@ -65,16 +65,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🎁 گزینه 1", callback_data="option_1"),
-            InlineKeyboardButton("⚙️ گزینه 2", callback_data="option_2")
+            InlineKeyboardButton("𓇳𓄂", callback_data="option_1"),
+            InlineKeyboardButton("𓅊𓂍", callback_data="option_2")
         ],
         [
-            InlineKeyboardButton("📚 گزینه 3", callback_data="option_3")
+            InlineKeyboardButton("°8", callback_data="option_3")
         ]
     ])
     
     await update.message.reply_text(
-        f"👋 سلام {first_name}!\n\nخوش‌آمدید! 🤖",
+        f" {first_name}!\n\nu R in! 🤖",
         reply_markup=keyboard
     )
 
@@ -83,13 +83,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data == "option_1":
-        await query.edit_message_text("✨ گزینه 1 انتخاب شد!")
+        await query.edit_message_text("nope!")
     
     elif query.data == "option_2":
-        await query.edit_message_text("⚡ گزینه 2 انتخاب شد!")
+        await query.edit_message_text("R u serious?!")
     
     elif query.data == "option_3":
-        text = "📚 گزینه 3 - 6 زیرشاخه اصلی"
+        text = "click on 4"
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("🔸 زیر 1", callback_data="sub_1"),
@@ -97,7 +97,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ],
             [
                 InlineKeyboardButton("🔶 زیر 3", callback_data="sub_3"),
-                InlineKeyboardButton("🟠 زیر 4", callback_data="sub_4")
+                InlineKeyboardButton("Do u trust me?💀", callback_data="sub_4")
             ],
             [
                 InlineKeyboardButton("🟡 زیر 5", callback_data="sub_5"),
