@@ -1,6 +1,8 @@
 *.pyc
 __pycache__/
 .env
-users_data.json
+# users_data.json  ← این خط را کامنت کن
 user_images/
 files/
+uploaded_files/
+files_db.json
