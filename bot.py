@@ -11,7 +11,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = "8722012735:AAFy-w5zfhxOPH1BgVA5ptUXgjDejG-FU8k"
+BOT_TOKEN = "8722012735:AAHWu3slPwHM6RgUQGqJULzdib-HQIhg9bo"
 USERS_FILE = "users_data.json"
 IMAGES_FOLDER = "user_images"
 FILES_FOLDER = "files"  # پوشه فایل‌ها
