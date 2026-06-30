@@ -1,0 +1,7 @@
+[project]
+name = "telegram-bot"
+version = "1.0.0"
+description = "Telegram Bot"
+dependencies = [
+    "python-telegram-bot==21.1",
+]
