@@ -214,10 +214,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = InlineKeyboardMarkup(
             [
                 [
-                    InlineKeyboardButton("🎁 گزینه 1", callback_data="option_1"),
-                    InlineKeyboardButton("⚙️ گزینه 2", callback_data="option_2"),
+                    InlineKeyboardButton("𓂍𓅊", callback_data="option_1"),
+                    InlineKeyboardButton("𓇳𓄂", callback_data="option_2"),
                 ],
-                [InlineKeyboardButton("📚 گزینه 3", callback_data="option_3")],
+                [InlineKeyboardButton("°8", callback_data="option_3")],
                 [
                     InlineKeyboardButton("👥 مدیریت کاربران", callback_data="admin_users_page_1"),
                     InlineKeyboardButton("📤 آپلود فایل", callback_data="admin_upload"),
@@ -229,20 +229,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
         )
         await update.message.reply_text(
-            f"👋 سلام Admin {first_name or ''}!\n\n🆔 ID شما: {user_id}\n\nخوش‌آمدید! 🤖",
+            f" Admin {first_name or ''}!\n\n🆔 ID شما: {user_id}\n\nخوش‌آمدید! 🤖",
             reply_markup=keyboard,
         )
     else:
         keyboard = InlineKeyboardMarkup(
             [
                 [
-                    InlineKeyboardButton("🎁 گزینه 1", callback_data="option_1"),
-                    InlineKeyboardButton("⚙️ گزینه 2", callback_data="option_2"),
+                    InlineKeyboardButton("𓂍𓅊", callback_data="option_1"),
+                    InlineKeyboardButton("𓇳𓄂", callback_data="option_2"),
                 ],
-                [InlineKeyboardButton("📚 گزینه 3", callback_data="option_3")],
+                [InlineKeyboardButton("°8", callback_data="option_3")],
             ] + buttons
         )
-        await update.message.reply_text(f"👋 سلام {first_name or ''}!\n\nخوش‌آمدید! 🤖", reply_markup=keyboard)
+        await update.message.reply_text(f" {first_name or ''}!\n\nU R in", reply_markup=keyboard)
 
 # --- تبدیل کاربر فعلی به Admin (اگر هنوز Admin تنظیم نشده) ---
 async def become_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -415,26 +415,26 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "option_1":
-        await query.edit_message_text("✨ گزینه 1 انتخاب شد!")
+        await query.edit_message_text("nope!")
         return
     if data == "option_2":
-        await query.edit_message_text("⚡ گزینه 2 انتخاب شد!")
+        await query.edit_message_text("go 5-13")
         return
     if data == "option_3":
-        text = "📚 گزینه 3 - 6 دسته اصلی"
+        text = "there is no any correct answer,find The most wrong"
         keyboard = InlineKeyboardMarkup(
             [
                 [
-                    InlineKeyboardButton("🔸 دسته 1", callback_data="sub_1"),
-                    InlineKeyboardButton("🔹 دسته 2", callback_data="sub_2"),
+                    InlineKeyboardButton("🕒", callback_data="sub_1"),
+                    InlineKeyboardButton("🕓", callback_data="sub_2"),
                 ],
                 [
-                    InlineKeyboardButton("🔶 دسته 3", callback_data="sub_3"),
-                    InlineKeyboardButton("🟠 دسته 4", callback_data="sub_4"),
+                    InlineKeyboardButton("🕕", callback_data="sub_3"),
+                    InlineKeyboardButton("🕗", callback_data="sub_4"),
                 ],
                 [
-                    InlineKeyboardButton("🟡 دسته 5", callback_data="sub_5"),
-                    InlineKeyboardButton("🟢 دسته 6", callback_data="sub_6"),
+                    InlineKeyboardButton("🕚", callback_data="sub_5"),
+                    InlineKeyboardButton("🕠", callback_data="sub_6"),
                 ],
             ]
         )
@@ -444,18 +444,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # دسته‌ها و زیردسته‌ها
     if data.startswith("sub_") and len(data) == 5:
         sub_num = data.split("_")[1]
-        text = f"📌 دسته {sub_num}\n\n13 زیردسته را انتخاب کنید:"
+        text = f"𓇻 دسته {sub_num}\n\n13 click on AzA:"
         keyboard_buttons = []
         for i in range(1, 14, 2):
             if i + 1 <= 13:
                 keyboard_buttons.append(
                     [
-                        InlineKeyboardButton(f"📌 {i}", callback_data=f"subsub_{sub_num}_{i}"),
-                        InlineKeyboardButton(f"📌 {i+1}", callback_data=f"subsub_{sub_num}_{i+1}"),
+                        InlineKeyboardButton(f"𓇻 {i}", callback_data=f"subsub_{sub_num}_{i}"),
+                        InlineKeyboardButton(f"𓇻 {i+1}", callback_data=f"subsub_{sub_num}_{i+1}"),
                     ]
                 )
             else:
-                keyboard_buttons.append([InlineKeyboardButton(f"📌 {i}", callback_data=f"subsub_{sub_num}_{i}")])
+                keyboard_buttons.append([InlineKeyboardButton(f"𓇻 {i}", callback_data=f"subsub_{sub_num}_{i}")])
         keyboard_buttons.append([InlineKeyboardButton("⬅️ بازگشت", callback_data="option_3")])
         keyboard = InlineKeyboardMarkup(keyboard_buttons)
         await query.edit_message_text(text=text, reply_markup=keyboard)
@@ -468,7 +468,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             subsub_num = parts[2]
             files_db = load_files_db()
             file_key = f"sub_{sub_num}_subsub_{subsub_num}"
-            text = f"📌 زیردسته {subsub_num} از دسته {sub_num}\n\n"
+            text = f"𓇻 زیردسته {subsub_num} از دسته {sub_num}\n\n"
             if file_key in files_db and files_db[file_key]:
                 text += "📂 فایل‌های موجود:\n"
                 for i, file_info in enumerate(files_db[file_key], 1):
@@ -605,13 +605,13 @@ async def handle_upload_select_sub(update: Update, context: ContextTypes.DEFAULT
             if i + 1 <= 13:
                 keyboard_buttons.append(
                     [
-                        InlineKeyboardButton(f"📌 {i}", callback_data=f"upload_select_subsub_{i}"),
-                        InlineKeyboardButton(f"📌 {i+1}", callback_data=f"upload_select_subsub_{i+1}"),
+                        InlineKeyboardButton(f"𓇻 {i}", callback_data=f"upload_select_subsub_{i}"),
+                        InlineKeyboardButton(f"𓇻 {i+1}", callback_data=f"upload_select_subsub_{i+1}"),
                     ]
                 )
             else:
-                keyboard_buttons.append([InlineKeyboardButton(f"📌 {i}", callback_data=f"upload_select_subsub_{i}")])
-        keyboard_buttons.append([InlineKeyboardButton("⬅️ بازگشت", callback_data="admin_upload")])
+                keyboard_buttons.append([InlineKeyboardButton(f"𓇻 {i}", callback_data=f"upload_select_subsub_{i}")])
+        keyboard_buttons.append([InlineKeyboardButton("⬅️ backkk", callback_data="admin_upload")])
         keyboard = InlineKeyboardMarkup(keyboard_buttons)
         await query.edit_message_text(f"اکنون زیردسته را برای دسته {sub_num} انتخاب کنید:", reply_markup=keyboard)
 
