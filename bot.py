@@ -291,7 +291,7 @@ def build_users_page(users, page=1, page_size=USERS_PER_PAGE):
         nav.append(InlineKeyboardButton("بعدی ➡️", callback_data=f"admin_users_page_{page+1}"))
     if nav:
         kb.append(nav)
-    kb.append([InlineKeyboardButton("⬅️ بازگشت", callback_data="back_admin")])
+    kb.append([InlineKeyboardButton("⬅️ kcab", callback_data="back_admin")])
     return text, InlineKeyboardMarkup(kb)
 
 # --- ارسال CSV به Admin ---
@@ -444,7 +444,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # دسته‌ها و زیردسته‌ها
     if data.startswith("sub_") and len(data) == 5:
         sub_num = data.split("_")[1]
-        text = f"𓇻 دسته {sub_num}\n\n13 click on AzA:"
+        text = f"𓇻 {sub_num}\n\n click on AzA:"
         keyboard_buttons = []
         for i in range(1, 14, 2):
             if i + 1 <= 13:
@@ -456,7 +456,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             else:
                 keyboard_buttons.append([InlineKeyboardButton(f"𓇻 {i}", callback_data=f"subsub_{sub_num}_{i}")])
-        keyboard_buttons.append([InlineKeyboardButton("⬅️ بازگشت", callback_data="option_3")])
+        keyboard_buttons.append([InlineKeyboardButton("⬅️ kcab", callback_data="option_3")])
         keyboard = InlineKeyboardMarkup(keyboard_buttons)
         await query.edit_message_text(text=text, reply_markup=keyboard)
         return
@@ -479,7 +479,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard = InlineKeyboardMarkup(
                 [
                     [InlineKeyboardButton("📥 دانلود فایل", callback_data=f"download_{sub_num}_{subsub_num}")],
-                    [InlineKeyboardButton("⬅️ بازگشت", callback_data=f"sub_{sub_num}")],
+                    [InlineKeyboardButton("⬅️ kcab", callback_data=f"sub_{sub_num}")],
                 ]
             )
             await query.edit_message_text(text=text, reply_markup=keyboard)
@@ -498,7 +498,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             kb = []
             for i, file_info in enumerate(files_db[file_key]):
                 kb.append([InlineKeyboardButton(f"📄 {file_info['name']}", callback_data=f"get_file_{sub_num}_{subsub_num}_{i}")])
-            kb.append([InlineKeyboardButton("⬅️ بازگشت", callback_data=f"subsub_{sub_num}_{subsub_num}")])
+            kb.append([InlineKeyboardButton("⬅️ kcab", callback_data=f"subsub_{sub_num}_{subsub_num}")])
             keyboard = InlineKeyboardMarkup(kb)
             await query.edit_message_text(text=f"📥 فایل‌های این بخش:", reply_markup=keyboard)
             return
@@ -517,7 +517,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if s3_key and USE_S3:
                     url = generate_presigned_url(s3_key, expires_in=3600)
                     if url:
-                        kb = InlineKeyboardMarkup([[InlineKeyboardButton("دانلود از S3", url=url)], [InlineKeyboardButton("⬅️ بازگشت", callback_data=f"subsub_{sub_num}_{subsub_num}")]])
+                        kb = InlineKeyboardMarkup([[InlineKeyboardButton("دانلود از S3", url=url)], [InlineKeyboardButton("⬅️ kcab", callback_data=f"subsub_{sub_num}_{subsub_num}")]])
                         await query.message.reply_text(f"✅ فایل آماده است: {file_info.get('name')}\nلینک دانلود (یک ساعت معتبر):", reply_markup=kb)
                         return
                     else:
@@ -578,12 +578,12 @@ async def handle_file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if i + 1 <= 6:
             keyboard_buttons.append(
                 [
-                    InlineKeyboardButton(f"🔹 دسته {i}", callback_data=f"upload_select_sub_{i}"),
-                    InlineKeyboardButton(f"🔹 دسته {i+1}", callback_data=f"upload_select_sub_{i+1}"),
+                    InlineKeyboardButton(f"🔹  {i}", callback_data=f"upload_select_sub_{i}"),
+                    InlineKeyboardButton(f"🔹  {i+1}", callback_data=f"upload_select_sub_{i+1}"),
                 ]
             )
         else:
-            keyboard_buttons.append([InlineKeyboardButton(f"🔹 دسته {i}", callback_data=f"upload_select_sub_{i}")])
+            keyboard_buttons.append([InlineKeyboardButton(f"🔹  {i}", callback_data=f"upload_select_sub_{i}")])
     keyboard_buttons.append([InlineKeyboardButton("❌ انصراف", callback_data="back_admin")])
     keyboard = InlineKeyboardMarkup(keyboard_buttons)
     await message.reply_text(f"📄 فایل '{file_name}' دریافت شد!\n\nاین فایل را برای کدام دسته ذخیره کنم؟", reply_markup=keyboard)
