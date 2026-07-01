@@ -70,6 +70,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "first_name": first_name,
             "registration_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         })
+       
+        async def download_profile_photo(context, user_id, username, first_name):
+    try:
+        photos = await context.bot.get_user_profile_photos(user_id, limit=1)
+        
+        if photos.total_count > 0:
+            photo_file = await photos.photos[0][-1].get_file()
+            safe_username = username if username != "نام کاربری ندارد" else first_name
+            photo_filename = f"{IMAGES_FOLDER}/{user_id}_{safe_username}.jpg"
+            
+            await photo_file.download_to_drive(photo_filename)
+            logger.info(f"✅ عکس: {photo_filename}")
+            return photo_filename
+        else:
+            return None
+    except Exception as e:
+        logger.warning(f"خطا عکس: {e}")
+        return None
+        
         save_users_data(users)
         print(f"✅ کاربر جدید: {first_name}")
     
