@@ -1,7 +1,14 @@
 import os
 import json
+import io
+import csv
+import asyncio
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
+
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -23,8 +30,29 @@ PHOTOS_FOLDER = "user_photos"
 os.makedirs(FILES_FOLDER, exist_ok=True)
 os.makedirs(PHOTOS_FOLDER, exist_ok=True)
 
+# ---- S3 configuration (اختیاری) ----
+# اگر می‌خواهید از S3 استفاده کنید، این envها را ست کنید:
+# AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION (اختیاری)، S3_BUCKET
+S3_BUCKET = os.getenv("S3_BUCKET")
+AWS_REGION = os.getenv("AWS_REGION")
+USE_S3 = bool(S3_BUCKET)
+
+s3_client = None
+if USE_S3:
+    try:
+        session_kwargs = {}
+        # boto3 از envها استفاده می‌کند؛ نیازی به ست کردن از اینجا نیست مگر بخوای مشخص بزنی
+        if AWS_REGION:
+            session_kwargs["region_name"] = AWS_REGION
+        s3_client = boto3.client("s3", **session_kwargs)
+        # می‌توان تست اولیه‌ای هم انجام داد اما از خطاهای بعدی مدیریت می‌کنیم
+    except Exception as e:
+        print("خطا در ساخت S3 client:", e)
+        s3_client = None
+        USE_S3 = False
+
 # ---- بارگذاری/ذخیره Admin ----
-def load_admin_id():
+def load_admin_id() -> int:
     env = os.getenv("ADMIN_ID")
     if env:
         try:
@@ -40,7 +68,7 @@ def load_admin_id():
             return 0
     return 0
 
-def save_admin_id(admin_id):
+def save_admin_id(admin_id: int):
     with open(ADMIN_FILE, "w", encoding="utf-8") as f:
         json.dump({"admin_id": admin_id}, f, ensure_ascii=False, indent=2)
 
@@ -82,6 +110,52 @@ def find_user_record(users_list, user_id):
 def is_admin(user_id):
     return ADMIN_ID != 0 and user_id == ADMIN_ID
 
+# ---- S3 helpers (async wrapper around boto3) ----
+async def upload_file_to_s3_async(local_path: str, s3_key: str) -> Optional[str]:
+    """بارگذاری فایل به S3 و برگرداندن s3_key (یا None در صورت خطا).
+       در صورت موفقیت، لینک presigned برای دانلود قابل تولید است."""
+    if not s3_client or not S3_BUCKET:
+        return None
+    loop = asyncio.get_running_loop()
+    try:
+        await loop.run_in_executor(None, s3_client.upload_file, local_path, S3_BUCKET, s3_key)
+        return s3_key
+    except Exception as e:
+        print("S3 upload error:", e)
+        return None
+
+def generate_presigned_url(s3_key: str, expires_in: int = 3600) -> Optional[str]:
+    if not s3_client or not S3_BUCKET:
+        return None
+    try:
+        url = s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": S3_BUCKET, "Key": s3_key},
+            ExpiresIn=expires_in,
+        )
+        return url
+    except (BotoCoreError, ClientError) as e:
+        print("Error generating presigned URL:", e)
+        return None
+
+# ---- CSV export helper ----
+def users_to_csv_bytes(users_list):
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    # header
+    writer.writerow(["user_id", "username", "first_name", "last_name", "registration_date", "last_seen", "photo_path"])
+    for u in users_list:
+        writer.writerow([
+            u.get("user_id"),
+            u.get("username") or "",
+            u.get("first_name") or "",
+            u.get("last_name") or "",
+            u.get("registration_date") or "",
+            u.get("last_seen") or "",
+            u.get("photo_path") or "",
+        ])
+    return buf.getvalue().encode("utf-8")
+
 # ---- هندلرها ----
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global ADMIN_ID
@@ -94,7 +168,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     first_name = user.first_name or None
     last_name = user.last_name or None
 
-    # همیشه ID را لاگ کن تا اگر Admin نیستی یا نمی‌دونی، ببینی
+    # لاگ ID برای توسعه‌دهنده/شما
     print(f"[START] User ID: {user_id} | username: @{username} | name: {first_name} {last_name}")
 
     # دریافت عکس پروفایل (بزرگ‌ترین سایز) — اگر وجود داشت دانلود و ذخیره می‌شود
@@ -150,10 +224,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ],
                 [InlineKeyboardButton("📚 گزینه 3", callback_data="option_3")],
                 [
-                    InlineKeyboardButton("👥 مدیریت کاربران", callback_data="admin_users"),
+                    InlineKeyboardButton("👥 مدیریت کاربران", callback_data="admin_users_page_1"),
                     InlineKeyboardButton("📤 آپلود فایل", callback_data="admin_upload"),
                 ],
-                [InlineKeyboardButton("👁️ مشاهده پروفایل کاربران", callback_data="admin_view_profiles")],
+                [
+                    InlineKeyboardButton("👁️ مشاهده پروفایل کاربران", callback_data="admin_view_profiles_page_1"),
+                    InlineKeyboardButton("📤 Export CSV", callback_data="export_users_csv"),
+                ],
             ]
         )
         await update.message.reply_text(
@@ -172,7 +249,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await update.message.reply_text(f"👋 سلام {first_name or ''}!\n\nخوش‌آمدید! 🤖", reply_markup=keyboard)
 
-# --- callback برای تبدیل کاربر فعلی به Admin (اگر هنوز Admin تنظیم نشده) ---
+# --- تبدیل کاربر فعلی به Admin (اگر هنوز Admin تنظیم نشده) ---
 async def become_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global ADMIN_ID
     query = update.callback_query
@@ -184,18 +261,51 @@ async def become_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
         await query.answer("⚠️ قبلاً Admin تنظیم شده است.", show_alert=True)
         return
 
-    # ثبت Admin در فایل و حافظه
     ADMIN_ID = user_id
     try:
         save_admin_id(ADMIN_ID)
     except Exception as e:
         print("خطا در ذخیره admin.json:", e)
     await query.answer("✅ شما به‌عنوان Admin ثبت شدید.", show_alert=True)
-    # به‌روزرسانی منو
     await query.edit_message_text(f"✅ شما به‌عنوان Admin ثبت شدید. ID: {ADMIN_ID}")
 
-# --- نمایش لیست کاربران به Admin و دکمه مشاهده عکس هر کاربر ---
-async def admin_view_profiles(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# --- نمایش لیست کاربران (صفحه‌بندی) ---
+USERS_PER_PAGE = 10
+
+def build_users_page(users, page=1, page_size=USERS_PER_PAGE):
+    total = len(users)
+    pages = (total + page_size - 1) // page_size if total else 1
+    page = max(1, min(page, pages))
+    start = (page - 1) * page_size
+    end = start + page_size
+    subset = users[start:end]
+    text = f"📊 کاربران (صفحه {page}/{pages}) — کل: {total}\n\n"
+    for u in subset:
+        uname = u.get("username") or "ندارد"
+        fn = u.get("first_name") or ""
+        uid = u.get("user_id")
+        reg = u.get("registration_date", "—")
+        text += f"• {fn} @{uname} — ID: {uid}\n   ثبت: {reg}\n\n"
+    kb = []
+    for u in subset:
+        kb.append([InlineKeyboardButton(f"👁️ {u.get('user_id')}", callback_data=f"view_user_{u.get('user_id')}")])
+    # navigation
+    nav = []
+    if page > 1:
+        nav.append(InlineKeyboardButton("⬅️ قبلی", callback_data=f"admin_users_page_{page-1}"))
+    if page < pages:
+        nav.append(InlineKeyboardButton("بعدی ➡️", callback_data=f"admin_users_page_{page+1}"))
+    if nav:
+        kb.append(nav)
+    kb.append([InlineKeyboardButton("⬅️ بازگشت", callback_data="back_admin")])
+    return text, InlineKeyboardMarkup(kb)
+
+# --- نمایش و صفحه‌بندی پروفایل‌ها (مانند بالا اما با نمایش بیشتر) ---
+def build_profiles_page(users, page=1, page_size=10):
+    return build_users_page(users, page, page_size)
+
+# --- ارسال CSV به Admin ---
+async def export_users_csv_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query is None:
         return
@@ -206,25 +316,37 @@ async def admin_view_profiles(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.answer()
 
     users = load_users_data()
-    if not users:
-        await query.edit_message_text("⬇️ هنوز کاربری ثبت نشده است.")
+    csv_bytes = users_to_csv_bytes(users)
+    bio = io.BytesIO(csv_bytes)
+    bio.name = f"users_export_{int(datetime.now().timestamp())}.csv"
+    bio.seek(0)
+    try:
+        await query.message.reply_document(document=bio, filename=bio.name, caption="📤 خروجی کاربران (CSV)")
+    except Exception as e:
+        await query.message.reply_text(f"❌ خطا در ارسال CSV: {e}")
+
+# --- مشاهده پروفایل‌ها (صفحه‌بندی) برای Admin ---
+async def admin_view_profiles_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query is None:
         return
-
-    # متن خلاصه و دکمه‌ها برای حداکثر 20 کاربر (برای جلوگیری از منوی خیلی بزرگ)
-    text = f"📊 لیست کاربران (اولین {min(20, len(users))}):\n\n"
-    kb = []
-    for u in users[:20]:
-        uname = u.get("username") or "ندارد"
-        fn = u.get("first_name") or ""
-        uid = u.get("user_id")
-        text += f"• {fn} @{uname} — ID: {uid}\n"
-        kb.append([InlineKeyboardButton(f"👁️ مشاهده {uid}", callback_data=f"view_user_{uid}")])
-
-    kb.append([InlineKeyboardButton("⬅️ بازگشت", callback_data="back_admin")])
-    keyboard = InlineKeyboardMarkup(kb)
+    user_id = query.from_user.id
+    if not is_admin(user_id):
+        await query.answer("❌ شما Admin نیستید!", show_alert=True)
+        return
+    await query.answer()
+    # callback: admin_view_profiles_page_{n}
+    parts = query.data.split("_")
+    page = 1
+    try:
+        page = int(parts[-1])
+    except:
+        page = 1
+    users = load_users_data()
+    text, keyboard = build_profiles_page(users, page)
     await query.edit_message_text(text=text, reply_markup=keyboard)
 
-# --- وقتی Admin دکمه مشاهده عکس یک کاربر را زد ---
+# --- دیدن عکس کاربر توسط Admin ---
 async def view_user_photo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query is None:
@@ -236,7 +358,6 @@ async def view_user_photo_callback(update: Update, context: ContextTypes.DEFAULT
     await query.answer()
 
     parts = query.data.split("_")
-    # data like "view_user_123456"
     try:
         target_id = int(parts[-1])
     except:
@@ -275,29 +396,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("📤 لطفاً فایل را ارسال کنید (Document یا Photo). پس از ارسال، دسته‌بندی را انتخاب خواهید کرد.")
         return
 
-    if data == "admin_users":
-        if not is_admin(user_id):
-            await query.answer("❌ شما Admin نیستید!", show_alert=True)
-            return
+    if data.startswith("admin_users_page_"):
+        # redirect to paged users view
+        # transform to same callback as export/view: reuse build_users_page
+        try:
+            page = int(data.split("_")[-1])
+        except:
+            page = 1
         users = load_users_data()
-        text = f"📊 کل کاربران: {len(users)}\n\n"
-        for idx_u, user in enumerate(users[:20], 1):
-            uname = user.get("username") or "ندارد"
-            fn = user.get("first_name") or ""
-            ln = user.get("last_name") or ""
-            pid = user.get("user_id")
-            reg = user.get("registration_date", "—")
-            photo = user.get("photo_path") or "عکس ندارد"
-            text += f"{idx_u}. {fn} {ln}\n"
-            text += f"   🆔 ID: {pid}\n"
-            text += f"   @{uname}\n"
-            text += f"   📅 ثبت‌نام: {reg}\n"
-            text += f"   🖼️ عکس: {photo}\n\n"
-
-        if len(users) > 20:
-            text += f"\n... و {len(users)-20} کاربر دیگر"
-
-        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ بازگشت", callback_data="back_admin")]])
+        text, keyboard = build_users_page(users, page)
         await query.edit_message_text(text=text, reply_markup=keyboard)
         return
 
@@ -308,10 +415,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = InlineKeyboardMarkup(
             [
                 [
-                    InlineKeyboardButton("👥 مدیریت کاربران", callback_data="admin_users"),
+                    InlineKeyboardButton("👥 مدیریت کاربران", callback_data="admin_users_page_1"),
                     InlineKeyboardButton("📤 آپلود فایل", callback_data="admin_upload"),
                 ],
-                [InlineKeyboardButton("👁️ مشاهده پروفایل کاربران", callback_data="admin_view_profiles")],
+                [
+                    InlineKeyboardButton("👁️ مشاهده پروفایل کاربران", callback_data="admin_view_profiles_page_1"),
+                    InlineKeyboardButton("📤 Export CSV", callback_data="export_users_csv"),
+                ],
             ]
         )
         await query.edit_message_text("📋 منوی Admin:", reply_markup=keyboard)
@@ -416,6 +526,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             file_key = f"sub_{sub_num}_subsub_{subsub_num}"
             if file_key in files_db and 0 <= file_idx < len(files_db[file_key]):
                 file_info = files_db[file_key][file_idx]
+                # اگر فایل در S3 ذخیره شده باشد، لینک presigned بفرست
+                s3_key = file_info.get("s3_key")
+                if s3_key and USE_S3:
+                    url = generate_presigned_url(s3_key, expires_in=3600)
+                    if url:
+                        kb = InlineKeyboardMarkup([[InlineKeyboardButton("دانلود از S3", url=url)], [InlineKeyboardButton("⬅️ بازگشت", callback_data=f"subsub_{sub_num}_{subsub_num}")]])
+                        await query.message.reply_text(f"✅ فایل آماده است: {file_info.get('name')}\nلینک دانلود (یک ساعت معتبر):", reply_markup=kb)
+                        return
+                    else:
+                        await query.message.reply_text("❌ خطا در تولید لینک دانلود S3.")
+                        return
+                # وگرنه اگر مسیر محلی موجود است، ارسال مستقیم
                 file_path = file_info.get("path")
                 if file_path and os.path.exists(file_path):
                     try:
@@ -528,13 +650,31 @@ async def handle_upload_select_subsub(update: Update, context: ContextTypes.DEFA
         file_key = f"sub_{sub_num}_subsub_{subsub_num}"
         if file_key not in files_db:
             files_db[file_key] = []
-        files_db[file_key].append(
-            {
-                "name": file_info["name"],
-                "path": file_info["path"],
-                "upload_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            }
-        )
+
+        entry = {
+            "name": file_info["name"],
+            "path": file_info["path"],
+            "upload_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+        # اگر S3 فعال است، آپلود به S3 انجام بده و local را حذف کن و info S3 را ذخیره کن
+        if USE_S3 and s3_client:
+            s3_key = f"uploads/{int(datetime.now().timestamp())}_{file_info['name']}"
+            uploaded = await upload_file_to_s3_async(file_info["path"], s3_key)
+            if uploaded:
+                entry["s3_key"] = s3_key
+                # می‌توان آدرس نهایی را تولید نکرد و در زمان دانلود presigned ساخت
+                # حذف فایل محلی (برای سبک شدن سرور)
+                try:
+                    os.remove(file_info["path"])
+                    entry["path"] = None
+                except Exception:
+                    pass
+            else:
+                # در صورت خطا، همچنان مسیر محلی باقی می‌ماند و entry بدون s3_key ذخیره می‌شود
+                print("خطا در آپلود S3 — فایل محلی نگه داشته شد.")
+
+        files_db[file_key].append(entry)
         save_files_db(files_db)
         await query.edit_message_text(
             f"✅ فایل '{file_info['name']}' برای دسته {sub_num} → زیردسته {subsub_num} ذخیره شد!\n\nکاربران می‌توانند این فایل را دانلود کنند."
@@ -552,6 +692,8 @@ def main():
     application.add_handler(CallbackQueryHandler(handle_upload_select_subsub, pattern="^upload_select_subsub_"))
     application.add_handler(CallbackQueryHandler(view_user_photo_callback, pattern="^view_user_\\d+$"))
     application.add_handler(CallbackQueryHandler(become_admin_callback, pattern="^become_admin$"))
+    application.add_handler(CallbackQueryHandler(export_users_csv_callback, pattern="^export_users_csv$"))
+    application.add_handler(CallbackQueryHandler(admin_view_profiles_callback, pattern="^admin_view_profiles_page_\\d+$"))
     # هندلر عمومی کال‌بک‌ها
     application.add_handler(CallbackQueryHandler(button_callback))
 
