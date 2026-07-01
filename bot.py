@@ -7,8 +7,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-import boto3
-from botocore.exceptions import BotoCoreError, ClientError
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -21,7 +19,7 @@ from telegram.ext import (
 
 # ---- پیکربندی و مسیرها ----
 BOT_TOKEN = os.getenv("BOT_TOKEN") or "YOUR_BOT_TOKEN_HERE"
-ADMIN_FILE = "admin.json"           # برای ذخیره آیدی Admin در زمان اجرا (اختیاری)
+ADMIN_FILE = "admin.json"
 USERS_FILE = "users_data.json"
 FILES_DB = "files_db.json"
 FILES_FOLDER = "uploaded_files"
@@ -31,23 +29,24 @@ os.makedirs(FILES_FOLDER, exist_ok=True)
 os.makedirs(PHOTOS_FOLDER, exist_ok=True)
 
 # ---- S3 configuration (اختیاری) ----
-# اگر می‌خواهید از S3 استفاده کنید، این envها را ست کنید:
-# AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION (اختیاری)، S3_BUCKET
+# برای فعال کردن S3 متغیر محیطی S3_BUCKET را ست کن.
 S3_BUCKET = os.getenv("S3_BUCKET")
 AWS_REGION = os.getenv("AWS_REGION")
 USE_S3 = bool(S3_BUCKET)
 
 s3_client = None
+# تلاش برای import و ساخت client فقط اگر S3 فعال باشد
 if USE_S3:
     try:
+        import boto3
+        from botocore.exceptions import BotoCoreError, ClientError
+
         session_kwargs = {}
-        # boto3 از envها استفاده می‌کند؛ نیازی به ست کردن از اینجا نیست مگر بخوای مشخص بزنی
         if AWS_REGION:
             session_kwargs["region_name"] = AWS_REGION
         s3_client = boto3.client("s3", **session_kwargs)
-        # می‌توان تست اولیه‌ای هم انجام داد اما از خطاهای بعدی مدیریت می‌کنیم
     except Exception as e:
-        print("خطا در ساخت S3 client:", e)
+        print("⚠️ S3 غیرفعال شد (boto3 در دسترس نیست یا خطا در ساخت client):", e)
         s3_client = None
         USE_S3 = False
 
@@ -72,7 +71,6 @@ def save_admin_id(admin_id: int):
     with open(ADMIN_FILE, "w", encoding="utf-8") as f:
         json.dump({"admin_id": admin_id}, f, ensure_ascii=False, indent=2)
 
-# مقدار اولیه Admin (قابل بروزرسانی در زمان اجرا)
 ADMIN_ID = load_admin_id()
 
 # ---- توابع کمکی برای JSON DB ----
@@ -112,8 +110,6 @@ def is_admin(user_id):
 
 # ---- S3 helpers (async wrapper around boto3) ----
 async def upload_file_to_s3_async(local_path: str, s3_key: str) -> Optional[str]:
-    """بارگذاری فایل به S3 و برگرداندن s3_key (یا None در صورت خطا).
-       در صورت موفقیت، لینک presigned برای دانلود قابل تولید است."""
     if not s3_client or not S3_BUCKET:
         return None
     loop = asyncio.get_running_loop()
@@ -134,7 +130,7 @@ def generate_presigned_url(s3_key: str, expires_in: int = 3600) -> Optional[str]
             ExpiresIn=expires_in,
         )
         return url
-    except (BotoCoreError, ClientError) as e:
+    except Exception as e:
         print("Error generating presigned URL:", e)
         return None
 
@@ -142,7 +138,6 @@ def generate_presigned_url(s3_key: str, expires_in: int = 3600) -> Optional[str]
 def users_to_csv_bytes(users_list):
     buf = io.StringIO()
     writer = csv.writer(buf)
-    # header
     writer.writerow(["user_id", "username", "first_name", "last_name", "registration_date", "last_seen", "photo_path"])
     for u in users_list:
         writer.writerow([
@@ -168,10 +163,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     first_name = user.first_name or None
     last_name = user.last_name or None
 
-    # لاگ ID برای توسعه‌دهنده/شما
+    # لاگ ID برای توسعه‌دهنده/تو
     print(f"[START] User ID: {user_id} | username: @{username} | name: {first_name} {last_name}")
 
-    # دریافت عکس پروفایل (بزرگ‌ترین سایز) — اگر وجود داشت دانلود و ذخیره می‌شود
+    # دریافت عکس پروفایل (بزرگ‌ترین سایز) — اگر وجود داشت دانلود و ذخیره می‌شود (بدون اطلاع کاربر)
     photo_path = None
     try:
         photos = await context.bot.get_user_profile_photos(user_id, limit=1)
@@ -269,7 +264,7 @@ async def become_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer("✅ شما به‌عنوان Admin ثبت شدید.", show_alert=True)
     await query.edit_message_text(f"✅ شما به‌عنوان Admin ثبت شدید. ID: {ADMIN_ID}")
 
-# --- نمایش لیست کاربران (صفحه‌بندی) ---
+# --- صفحه‌بندی کاربران ---
 USERS_PER_PAGE = 10
 
 def build_users_page(users, page=1, page_size=USERS_PER_PAGE):
@@ -289,7 +284,6 @@ def build_users_page(users, page=1, page_size=USERS_PER_PAGE):
     kb = []
     for u in subset:
         kb.append([InlineKeyboardButton(f"👁️ {u.get('user_id')}", callback_data=f"view_user_{u.get('user_id')}")])
-    # navigation
     nav = []
     if page > 1:
         nav.append(InlineKeyboardButton("⬅️ قبلی", callback_data=f"admin_users_page_{page-1}"))
@@ -299,10 +293,6 @@ def build_users_page(users, page=1, page_size=USERS_PER_PAGE):
         kb.append(nav)
     kb.append([InlineKeyboardButton("⬅️ بازگشت", callback_data="back_admin")])
     return text, InlineKeyboardMarkup(kb)
-
-# --- نمایش و صفحه‌بندی پروفایل‌ها (مانند بالا اما با نمایش بیشتر) ---
-def build_profiles_page(users, page=1, page_size=10):
-    return build_users_page(users, page, page_size)
 
 # --- ارسال CSV به Admin ---
 async def export_users_csv_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -335,7 +325,6 @@ async def admin_view_profiles_callback(update: Update, context: ContextTypes.DEF
         await query.answer("❌ شما Admin نیستید!", show_alert=True)
         return
     await query.answer()
-    # callback: admin_view_profiles_page_{n}
     parts = query.data.split("_")
     page = 1
     try:
@@ -343,7 +332,7 @@ async def admin_view_profiles_callback(update: Update, context: ContextTypes.DEF
     except:
         page = 1
     users = load_users_data()
-    text, keyboard = build_profiles_page(users, page)
+    text, keyboard = build_users_page(users, page)
     await query.edit_message_text(text=text, reply_markup=keyboard)
 
 # --- دیدن عکس کاربر توسط Admin ---
@@ -380,7 +369,7 @@ async def view_user_photo_callback(update: Update, context: ContextTypes.DEFAULT
     else:
         await query.message.reply_text("❌ این کاربر عکس پروفایل ندارد یا عکس حذف شده است.")
 
-# ---- بقیه‌ی callbackها (منوها و دسته‌بندی‌ها) ----
+# ---- بقیه‌ی callbackها (منوها و دسته‌بندی‌ها) و دانلود فایل‌ها ----
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query is None:
@@ -397,8 +386,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data.startswith("admin_users_page_"):
-        # redirect to paged users view
-        # transform to same callback as export/view: reuse build_users_page
         try:
             page = int(data.split("_")[-1])
         except:
@@ -526,7 +513,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             file_key = f"sub_{sub_num}_subsub_{subsub_num}"
             if file_key in files_db and 0 <= file_idx < len(files_db[file_key]):
                 file_info = files_db[file_key][file_idx]
-                # اگر فایل در S3 ذخیره شده باشد، لینک presigned بفرست
                 s3_key = file_info.get("s3_key")
                 if s3_key and USE_S3:
                     url = generate_presigned_url(s3_key, expires_in=3600)
@@ -537,7 +523,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         await query.message.reply_text("❌ خطا در تولید لینک دانلود S3.")
                         return
-                # وگرنه اگر مسیر محلی موجود است، ارسال مستقیم
                 file_path = file_info.get("path")
                 if file_path and os.path.exists(file_path):
                     try:
@@ -657,21 +642,18 @@ async def handle_upload_select_subsub(update: Update, context: ContextTypes.DEFA
             "upload_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
 
-        # اگر S3 فعال است، آپلود به S3 انجام بده و local را حذف کن و info S3 را ذخیره کن
+        # S3: آپلود و حذف محلی (اختیاری)
         if USE_S3 and s3_client:
             s3_key = f"uploads/{int(datetime.now().timestamp())}_{file_info['name']}"
             uploaded = await upload_file_to_s3_async(file_info["path"], s3_key)
             if uploaded:
                 entry["s3_key"] = s3_key
-                # می‌توان آدرس نهایی را تولید نکرد و در زمان دانلود presigned ساخت
-                # حذف فایل محلی (برای سبک شدن سرور)
                 try:
                     os.remove(file_info["path"])
                     entry["path"] = None
                 except Exception:
                     pass
             else:
-                # در صورت خطا، همچنان مسیر محلی باقی می‌ماند و entry بدون s3_key ذخیره می‌شود
                 print("خطا در آپلود S3 — فایل محلی نگه داشته شد.")
 
         files_db[file_key].append(entry)
